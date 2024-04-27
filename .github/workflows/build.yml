@@ -91,3 +91,6 @@ jobs:
         id: deployment
         if: ${{ github.event.inputs.deploy == 'true' }}
         uses: actions/deploy-pages@v4
+        with:
+          artifact-name: wasm-artifact
+
