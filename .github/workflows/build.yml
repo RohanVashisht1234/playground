@@ -1,29 +1,25 @@
 name: Deploy
 on:
-    workflow_dispatch:
-        inputs:
-          version:
-            description: Release Version
-            default: v2.1.4
-            required: true
-          
-          deploy:
-            description: Deploy the output to GitHub Pages
-            type: choice
-            required: true
-            default: 'true'
-            options:
-              - true
-              - false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release Version
+        default: v2.1.4
+        required: true
+      deploy:
+        description: Deploy the output to GitHub Pages
+        type: choice
+        required: true
+        default: 'true'
+        options:
+          - true
+          - false
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -37,32 +33,28 @@ jobs:
     steps:
       - name: Setup environment variables
         run: |
-            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-            echo "INSTALL_REF=${{ github.event.inputs.version }}" >> "$GITHUB_ENV"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "INSTALL_REF=${{ github.event.inputs.version }}" >> "$GITHUB_ENV"
 
-      # TODO: fix cache
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v14
-        # with:
-        #   version: 3.1.58
-        #   actions-cache-folder: emsdk-cache
 
       - name: Checkout Lite XL
         uses: actions/checkout@v4
         with:
-            repository: lite-xl/lite-xl
-            ref: ${{ github.event.inputs.version }}
-    
+          repository: lite-xl/lite-xl
+          ref: ${{ github.event.inputs.version }}
+
       - name: Checkout this repository
         uses: actions/checkout@v4
         with:
           path: web
-        
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-            python-version: '3.x'
-    
+          python-version: '3.x'
+
       - name: Install meson
         run: pip install meson ninja
 
@@ -73,11 +65,14 @@ jobs:
             --cross-file web/cross/disable-pcre2-jit.txt
           meson compile -C build
 
+      - name: Enable GPU support
+        run: |
+          echo 'EXPORTED_FUNCTIONS=["cwrap"]' >> build/meson-info/success.json
+
       - name: Create Lite XL Package
         run: |
           bash scripts/package.sh --builddir build --version ${INSTALL_REF} --debug --addons
 
-      # the bundle file is called bundle.wasm to trick reverse proxies into compressing them
       - name: Create distribution files
         run: |
           mkdir dist
@@ -85,12 +80,13 @@ jobs:
           python $EMSDK/upstream/emscripten/tools/file_packager.py bundle.wasm --preload lite-xl/data@/usr/share/lite-xl \
             --js-output=bundle.wasm.js --no-force --use-preload-cache --no-node
           cp bundle.wasm.js bundle.wasm dist
-      
+
       - name: Create Artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
+          name: wasm-artifact
           path: dist
-      
+
       - name: Deploy
         id: deployment
         if: ${{ github.event.inputs.deploy == 'true' }}
